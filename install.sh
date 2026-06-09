@@ -1,7 +1,10 @@
 #!/bin/bash
-# VoiceCoder v4 — 一键安装脚本
+# VoiceCoder v4 — macOS / Linux Installer
 # Usage: curl -fsSL https://voicecoder-site-production.up.railway.app/install.sh | bash
 #   or: curl -fsSL https://clungtsang.github.io/voicecoder-site/install.sh | bash
+#
+# Windows users: see install.ps1
+#   irm https://voicecoder-site-production.up.railway.app/install.ps1 | iex
 
 set -e
 

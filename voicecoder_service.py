@@ -16,6 +16,7 @@ import argparse
 import json
 import subprocess
 import re
+import platform
 import numpy as np
 
 # --- State ---
@@ -316,21 +317,65 @@ def stop_and_transcribe():
 
 
 def paste_to_cursor(text):
-    """Paste text to active application via clipboard + Cmd+V"""
+    """Paste text to active application — cross-platform (macOS / Windows / Linux)"""
     if not text.strip():
         return
+    system = platform.system()
     try:
-        escaped = text.replace('\\', '\\\\').replace('"', '\\"')
-        script_set = f'''
-        set the clipboard to "{escaped}"
-        '''
-        subprocess.run(['osascript', '-e', script_set], capture_output=True, timeout=5)
-        time.sleep(0.05)
-        script_paste = 'tell application "System Events" to keystroke "v" using command down'
-        subprocess.run(['osascript', '-e', script_paste], capture_output=True, timeout=5)
-        print(f"[VoiceCoder] Pasted: {text[:50]}...", file=sys.stderr)
+        if system == "Darwin":
+            # macOS: AppleScript clipboard + Cmd+V
+            escaped = text.replace('\\', '\\\\').replace('"', '\\"')
+            script_set = f'''
+            set the clipboard to "{escaped}"
+            '''
+            subprocess.run(['osascript', '-e', script_set], capture_output=True, timeout=5)
+            time.sleep(0.05)
+            script_paste = 'tell application "System Events" to keystroke "v" using command down'
+            subprocess.run(['osascript', '-e', script_paste], capture_output=True, timeout=5)
+
+        elif system == "Windows":
+            # Windows: pyperclip + SendKeys
+            try:
+                import pyperclip
+                pyperclip.copy(text)
+            except ImportError:
+                # Fallback: ctypes win32 clipboard
+                import ctypes
+                CF_UNICODETEXT = 13
+                kernel32 = ctypes.windll.kernel32
+                user32 = ctypes.windll.user32
+                user32.OpenClipboard(0)
+                user32.EmptyClipboard()
+                handle = kernel32.GlobalAlloc(0x0042, (len(text) + 1) * 2)
+                ptr = kernel32.GlobalLock(handle)
+                ctypes.cdll.msvcrt.wcscpy(ctypes.c_wchar_p(ptr), text)
+                kernel32.GlobalUnlock(handle)
+                user32.SetClipboardData(CF_UNICODETEXT, handle)
+                user32.CloseClipboard()
+            time.sleep(0.05)
+            # Send Ctrl+V
+            try:
+                from pynput import keyboard
+                kb = keyboard.Controller()
+                kb.press(keyboard.Key.ctrl)
+                kb.press('v')
+                kb.release('v')
+                kb.release(keyboard.Key.ctrl)
+            except ImportError:
+                # Fallback: PowerShell SendKeys
+                subprocess.run([
+                    'powershell', '-Command',
+                    f'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait("^v")'
+                ], capture_output=True, timeout=5)
+
+        else:
+            # Linux: xclip + xdotool
+            subprocess.run(['xclip', '-selection', 'clipboard'], input=text.encode(), timeout=5)
+            subprocess.run(['xdotool', 'key', 'ctrl+v'], capture_output=True, timeout=5)
+
+        print(f"[VoiceCoder] Pasted ({system}): {text[:50]}...", file=sys.stderr)
     except Exception as e:
-        print(f"[VoiceCoder] Paste error: {e}", file=sys.stderr)
+        print(f"[VoiceCoder] Paste error ({system}): {e}", file=sys.stderr)
 
 
 def handle_client(conn):
@@ -386,16 +431,25 @@ def handle_client(conn):
 def run_server():
     global _socket_path
 
-    if os.path.exists(_socket_path):
-        os.unlink(_socket_path)
+    system = platform.system()
 
-    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server.bind(_socket_path)
-    server.listen(5)
-    os.chmod(_socket_path, 0o600)
-
-    print(f"[VoiceCoder] Server listening on {_socket_path}", file=sys.stderr)
+    if system == "Windows":
+        # Windows: TCP socket (no AF_UNIX support)
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind(("127.0.0.1", 19641))
+        server.listen(5)
+        print(f"[VoiceCoder] Server listening on 127.0.0.1:19641 (TCP)", file=sys.stderr)
+    else:
+        # macOS / Linux: Unix domain socket
+        if os.path.exists(_socket_path):
+            os.unlink(_socket_path)
+        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind(_socket_path)
+        server.listen(5)
+        os.chmod(_socket_path, 0o600)
+        print(f"[VoiceCoder] Server listening on {_socket_path}", file=sys.stderr)
     print(f"[VoiceCoder] Engine: SenseVoice Small | CoreML | Amplification + Hallucination filter", file=sys.stderr)
 
     def signal_handler(sig, frame):
