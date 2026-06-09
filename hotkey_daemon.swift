@@ -161,8 +161,12 @@ class MouseMonitor {
             callback: callback,
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
-            print("[MouseMonitor] Failed to create event tap.")
+            print("[MouseMonitor] Failed to create event tap. Retrying in 5s...")
             showAccessibilityPrompt()
+            // Retry instead of giving up
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
+                self.startMonitoring()
+            }
             return
         }
 
@@ -177,20 +181,11 @@ class MouseMonitor {
 
     func showAccessibilityPrompt() {
         DispatchQueue.main.async {
-            let alert = NSAlert()
-            alert.messageText = "VoiceCoder 需要辅助功能权限"
-            alert.informativeText = "请在 系统设置 → 隐私与安全性 → 辅助功能 中添加并启用 VoiceCoder，然后重新启动。"
-            alert.alertStyle = .warning
-            alert.addButton(withTitle: "打开系统设置")
-            alert.addButton(withTitle: "退出")
-
-            let response = alert.runModal()
-            if response == .alertFirstButtonReturn {
-                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                    NSWorkspace.shared.open(url)
-                }
+            // Just update status bar, don't block or terminate
+            if let item = self.statusItem?.menu?.item(withTag: 100) {
+                item.title = "VoiceCoder: ⚠️ 需要辅助功能权限"
             }
-            NSApp.terminate(nil)
+            print("[MouseMonitor] Please grant Accessibility permission in System Settings → Privacy & Security → Accessibility")
         }
     }
 
@@ -222,9 +217,11 @@ class MouseMonitor {
 
         DispatchQueue.global(qos: .userInitiated).async {
             let client = SocketClient(path: "/tmp/voicecoder.sock")
-            if let resp = client.send(["action": "stop_streaming", "auto_paste": true, "seconds": 0]) {
+            if let resp = client.send(["action": "stop_streaming", "auto_paste": false, "seconds": 0]) {
                 if let result = resp["result"] as? String, !result.isEmpty {
                     print("[MouseMonitor] ✅ Transcribed: \(result)")
+                    // Paste directly from here (we have accessibility permission)
+                    self.pasteText(result)
                 } else if let error = resp["error"] as? String {
                     print("[MouseMonitor] ❌ Error: \(error)")
                 } else {
@@ -232,6 +229,40 @@ class MouseMonitor {
                 }
             }
         }
+    }
+
+    func pasteText(_ text: String) {
+        // Set clipboard
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+
+        Thread.sleep(forTimeInterval: 0.05)
+
+        // Simulate Cmd+V using CGEvent
+        let source = CGEventSource(stateID: .hidSystemState)
+
+        // Cmd down
+        let cmdDown = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: true)
+        cmdDown?.flags = .maskCommand
+        cmdDown?.post(tap: .cghidEventTap)
+
+        // V down
+        let vDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)
+        vDown?.flags = .maskCommand
+        vDown?.post(tap: .cghidEventTap)
+
+        // V up
+        let vUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
+        vUp?.flags = .maskCommand
+        vUp?.post(tap: .cghidEventTap)
+
+        // Cmd up
+        let cmdUp = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: false)
+        cmdUp?.flags = .maskCommand
+        cmdUp?.post(tap: .cghidEventTap)
+
+        print("[MouseMonitor] ✅ Pasted to cursor: \(text.prefix(50))")
     }
 
     func flashRecording() {
@@ -275,14 +306,95 @@ class MouseMonitor {
     }
 }
 
+// MARK: - Service Manager
+
+class ServiceManager {
+    var serviceProcess: Process?
+
+    func startService() {
+        // Kill stale service + socket
+        Process.launchedProcess(launchPath: "/usr/bin/pkill", arguments: ["-f", "voicecoder_service.py"])
+        Thread.sleep(forTimeInterval: 0.5)
+        try? FileManager.default.removeItem(atPath: "/tmp/voicecoder.sock")
+
+        let dir = (Bundle.main.executablePath! as NSString).deletingLastPathComponent
+        // If inside .app bundle, resolve to project dir; otherwise use hardcoded path
+        let projectDir: String
+        if dir.contains(".app/Contents/MacOS") {
+            projectDir = NSHomeDirectory() + "/workspace/voicecoder"
+        } else {
+            projectDir = dir
+        }
+
+        let venv = NSHomeDirectory() + "/.venv/whisper-env/bin/python3"
+        let script = projectDir + "/voicecoder_service.py"
+
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: venv)
+        proc.arguments = [script, "--model", "sensevoice", "--lang", "zh"]
+        proc.environment = ProcessInfo.processInfo.environment
+        proc.currentDirectoryURL = URL(fileURLWithPath: projectDir)
+
+        do {
+            try proc.run()
+            serviceProcess = proc
+            print("[ServiceManager] Started service (PID \(proc.processIdentifier))")
+        } catch {
+            print("[ServiceManager] Failed to start service: \(error)")
+        }
+    }
+
+    func stopService() {
+        if let proc = serviceProcess, proc.isRunning {
+            proc.terminate()
+        }
+        Process.launchedProcess(launchPath: "/usr/bin/pkill", arguments: ["-f", "voicecoder_service.py"])
+    }
+}
+
+let serviceMgr = ServiceManager()
+
 // MARK: - Main
 
 let app = NSApplication.shared
 let monitor = MouseMonitor()
 MouseMonitor.shared = monitor
 
+// Start Python service first, then setup UI
+serviceMgr.startService()
+
+// Wait for socket then start monitoring
+DispatchQueue.global(qos: .background).async {
+    for _ in 1...20 {
+        if FileManager.default.fileExists(atPath: "/tmp/voicecoder.sock") {
+            DispatchQueue.main.async {
+                print("[App] Service ready, starting monitor...")
+                monitor.updateStatus()
+            }
+            return
+        }
+        Thread.sleep(forTimeInterval: 0.5)
+    }
+    print("[App] Warning: Service socket not found after 10s")
+}
+
+// Prevent automatic termination by macOS
+app.disableRelaunchOnLogin()
+ProcessInfo.processInfo.disableAutomaticTermination("VoiceCoder is running")
+
 monitor.setupStatusBar()
 monitor.startMonitoring()
 
 app.setActivationPolicy(.accessory)
+
+// Clean up on exit
+app.delegate = {
+    class Delegate: NSObject, NSApplicationDelegate {
+        func applicationWillTerminate(_ notification: Notification) {
+            serviceMgr.stopService()
+        }
+    }
+    return Delegate()
+}()
+
 app.run()

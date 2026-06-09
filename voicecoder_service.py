@@ -346,12 +346,19 @@ def paste_to_cursor(text):
     system = platform.system()
     try:
         if system == "Darwin":
-            # macOS: AppleScript clipboard + Cmd+V
-            escaped = text.replace('\\', '\\\\').replace('"', '\\"')
-            script_set = f'''
-            set the clipboard to "{escaped}"
-            '''
-            subprocess.run(['osascript', '-e', script_set], capture_output=True, timeout=5)
+            # macOS: Use paste_helper (CGEvent, no osascript permission needed)
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            paste_helper = os.path.join(script_dir, 'paste_helper')
+            if os.path.isfile(paste_helper):
+                proc = subprocess.run(
+                    [paste_helper],
+                    input=text.encode('utf-8'),
+                    capture_output=True, timeout=5
+                )
+                if proc.returncode == 0:
+                    return
+            # Fallback: pbcopy + osascript (may need accessibility permission)
+            subprocess.run(['pbcopy'], input=text.encode('utf-8'), timeout=5)
             time.sleep(0.05)
             script_paste = 'tell application "System Events" to keystroke "v" using command down'
             subprocess.run(['osascript', '-e', script_paste], capture_output=True, timeout=5)
