@@ -20,6 +20,15 @@ import urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socket import socket, AF_UNIX, AF_INET, SOCK_STREAM
 
+# Load .env file (same directory as this script)
+_env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+if os.path.exists(_env_path):
+    for _line in open(_env_path):
+        _line = _line.strip()
+        if _line and not _line.startswith('#') and '=' in _line:
+            _k, _v = _line.split('=', 1)
+            os.environ.setdefault(_k.strip(), _v.strip())
+
 API_PORT = 19642
 SOCKET_PATH = '/tmp/voicecoder.sock'
 TCP_HOST = '127.0.0.1'
@@ -32,8 +41,8 @@ elif platform.system() == 'Linux':
     DB_DIR = os.path.expanduser('~/.local/share/voicecoder')
 DB_PATH = os.path.join(DB_DIR, 'voicecoder.db')
 
-GITHUB_CLIENT_ID = 'Ov23ct8qzWOi7eQCDh36'
-GITHUB_CLIENT_SECRET = 'REDACTED_GITHUB_SECRET'
+GITHUB_CLIENT_ID = os.environ.get('GITHUB_CLIENT_ID', '')
+GITHUB_CLIENT_SECRET = os.environ.get('GITHUB_CLIENT_SECRET', '')
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 TERMS_PATH = os.path.join(SCRIPT_DIR, 'tech_terms.json')

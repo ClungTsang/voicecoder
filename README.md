@@ -1,169 +1,204 @@
-# VoiceCoder v4
+<div align="center">
 
-> 🎙️ 按住鼠标中键说话，松开自动转写并粘贴 — 程序员"动口不动手"的语音输入工具
+# ◉ VoiceCoder
 
-基于阿里通义 **SenseVoice Small** 模型，专为中英文混合编程场景优化，支持技术名词纠错。
+**开源语音输入工具 · 核心后端**
 
-## ✨ 特性
+SenseVoice Small 语音引擎 · HTTP API Bridge · 热键守护 · 技术名词纠错
 
-- **🖱️ 鼠标中键触发** — 无需记快捷键，按住说话、松开转写
-- **🇨🇳 永远简体中文** — SenseVoice 非自回归架构，零繁体、零幻觉
-- **📝 自带标点符号** — 转写结果自带逗号句号，无需后处理
-- **⚡ 极速转写** — 16.9x 实时速度，0.2 秒完成转录
-- **🔧 技术名词纠错** — 内置 87 个技术名词白名单（GitHub, Railway, Supabase, Cloudflare...）+ DeepSeek LLM 兜底
-- **💻 本地运行** — 模型和转写全程本地，不依赖云服务
-- **🔄 开机自启** — launchd 守护进程，崩溃自动恢复
-- **🪶 轻量低耗** — 空闲时 CPU ~0%，内存 ~290 MB
+[![Release](https://img.shields.io/github/v/release/ClungTsang/voicecoder?style=flat-square&color=0d9488)](https://github.com/ClungTsang/voicecoder/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue?style=flat-square&logo=python)]()
 
-## 🚀 快速开始
+</div>
 
-### 环境要求
+---
 
-- macOS 14.0+（Apple Silicon M 系列推荐）
-- Python 3.11+
-- Xcode Command Line Tools（编译 Swift 热键守护进程）
-
-### 安装
-
-**一行命令安装（推荐）：**
-
-```bash
-curl -fsSL https://voicecoder.org/install.sh | bash
-```
-
-**或者手动安装：**
-
-```bash
-git clone https://github.com/ClungTsang/voicecoder.git ~/workspace/voicecoder
-cd ~/workspace/voicecoder
-./install.sh
-```
-
-### 使用
-
-1. 将光标移到任意文本输入框
-2. **按住鼠标中键（滚轮按下）**
-3. 对着麦克风说话
-4. **松开鼠标中键** → 自动转写并粘贴
-
-> ⚠️ 首次使用需要在 **系统设置 → 隐私与安全性 → 辅助功能** 中授权 VoiceCoder。
-
-## 🧠 技术架构
+## 架构
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    VoiceCoder v4                      │
-├─────────────────────────────────────────────────────┤
-│  [鼠标中键]  →  hotkey_daemon (Swift/CGEvent)        │
-│       │                                              │
-│       ▼                                              │
-│  [音频采集]  →  sounddevice InputStream (44.1kHz)    │
-│       │                                              │
-│       ▼                                              │
-│  [归一化放大] → 峰值放大到 0.8（适配 EarPods 低音量） │
-│       │                                              │
-│       ▼                                              │
-│  [语音转写]  →  SenseVoice Small (sherpa-onnx)       │
-│       │            ONNX int8 + CoreML 加速            │
-│       ▼                                              │
-│  [幻觉过滤]  →  正则匹配过滤纯标点/单字输出            │
-│       │                                              │
-│       ▼                                              │
-│  [第1层纠错] →  87 个技术名词字典 (0ms, 免费)         │
-│       │                                              │
-│       ▼                                              │
-│  [第2层纠错] →  DeepSeek LLM (~1s, ¥0.001/次)        │
-│       │                                              │
-│       ▼                                              │
-│  [粘贴到光标] →  osascript Cmd+V                      │
-└─────────────────────────────────────────────────────┘
+┌──────────────────┐     HTTP (port 19642)     ┌────────────────────┐
+│  VoiceCoder      │ ◄────────────────────────► │  voicecoder_api.py │
+│  Desktop (Tauri) │                            │  (HTTP API Bridge) │
+└──────────────────┘                            └────────┬───────────┘
+                                                         │ Socket / TCP
+                                                ┌────────▼───────────┐
+                                                │ voicecoder_service │
+                                                │ (SenseVoice STT)   │
+                                                └────────▲───────────┘
+                                                         │
+                                                ┌────────┴───────────┐
+                                                │ voicecoder_daemon  │
+                                                │ (热键守护进程)      │
+                                                └────────────────────┘
 ```
 
-## 📦 项目结构
-
-```
-voicecoder/
-├── voicecoder_service.py    # 核心转写服务（Unix Socket 通信）
-├── voicecoder_client.py     # 客户端 CLI（ping/status 命令）
-├── hotkey_daemon.swift      # 鼠标中键监听守护进程
-├── tech_terms.json          # 技术名词纠错字典（87 个精确匹配 + 11 个正则）
-├── install.sh               # 一键安装脚本
-├── start.sh                 # 手动启动脚本（含 API key 配置）
-├── com.voicecoder.service.plist  # launchd 服务配置（开机自启）
-├── com.voicecoder.hotkey.plist   # launchd 热键监听配置
-└── README.md                # 本文档
-```
-
-## ⚙️ 配置
-
-### 模型
-
-默认使用 **SenseVoice Small int8 ONNX + CoreML** 加速，模型自动下载到 `~/.cache/sherpa-onnx/sense-voice-zh/`（约 1.1 GB）。
-
-### LLM 纠错
-
-默认使用 DeepSeek Chat（通过 New API Gateway，极低成本）。如需更换：
-
-```bash
-export LLM_CORRECT_KEY="your-api-key"
-export LLM_CORRECT_URL="https://your-endpoint/v1/chat/completions"
-export LLM_CORRECT_MODEL="deepseek-chat"
-```
-
-### 技术名词字典
-
-编辑 `tech_terms.json` 添加自定义词条，重启服务即生效：
-
-```json
-{
-  "exact": {
-    "误识别文本": "正确文本"
-  },
-  "regex": [
-    ["正则匹配(大小写不敏感)", "正确文本"]
-  ]
-}
-```
-
-## 📊 资源占用
-
-| 指标 | 数值 |
+| 组件 | 说明 |
 |------|------|
-| 空闲内存 | ~290 MB（含 1.1 GB ONNX 模型加载） |
-| 空闲 CPU | ~0% |
-| 转写时 CPU | 瞬时 ~10%（持续 < 1 秒） |
-| 模型加载时 CPU | ~25%（仅启动时 ~25 秒） |
-| 24 GB Mac 占比 | ~1.3% |
+| `voicecoder_api.py` | HTTP REST API Bridge，16+ 端点，SQLite 持久化 |
+| `voicecoder_service.py` | 语音转写引擎 (SenseVoice Small ONNX/CoreML) |
+| `voicecoder_daemon.py` | 热键守护进程 (监听鼠标中键) |
+| `tech_terms.json` | 技术名词纠错字典 |
 
-## 🔧 故障排查
+## 安装
+
+### 一键安装（macOS）
 
 ```bash
-# 查看服务状态
-python3 voicecoder_client.py ping
-
-# 查看服务日志
-tail -f /tmp/voicecoder-stderr.log
-tail -f /tmp/voicecoder-hotkey-stderr.log
-
-# 手动重启
-launchctl unload ~/Library/LaunchAgents/com.voicecoder.service.plist
-launchctl unload ~/Library/LaunchAgents/com.voicecoder.hotkey.plist
-launchctl load ~/Library/LaunchAgents/com.voicecoder.service.plist
-launchctl load ~/Library/LaunchAgents/com.voicecoder.hotkey.plist
+curl -fsSL https://raw.githubusercontent.com/ClungTsang/voicecoder/main/install.sh | bash
 ```
 
-## 为什么选择 SenseVoice 而非 Whisper？
+### 手动安装
 
-| 指标 | SenseVoice Small | Whisper Small |
-|------|------------------|---------------|
-| 中文准确率 (CER) | **~4.2%** | ~10.1% |
-| 简繁体 | **永远简体** | 混出繁体 |
-| 标点符号 | **自带** | 需后处理 |
-| 幻觉 | **非自回归，零幻觉** | 有（"字幕 by 索兰娅"） |
-| 速度 | **16.9x 实时** | 2.3x 实时 |
-| 模型大小 | 1.1 GB | 500 MB |
-| 加载时间 | ~25s (CoreML) | ~5s |
+```bash
+git clone https://github.com/ClungTsang/voicecoder.git
+cd voicecoder
 
-## 📄 许可
+# 创建虚拟环境
+python3 -m venv venv
+source venv/bin/activate
 
-MIT License — 自由使用、修改、分发。
+# 安装依赖
+pip install -r requirements.txt
+
+# 启动
+python voicecoder_api.py  # HTTP API Bridge (port 19642)
+python voicecoder_daemon.py  # 热键守护 (需要另一个终端)
+```
+
+## 配置
+
+### 环境变量
+
+创建 `.env` 文件（不提交到 git）：
+
+```bash
+# GitHub OAuth (桌面端登录)
+GITHUB_CLIENT_ID=your_client_id
+GITHUB_CLIENT_SECRET=your_client_secret
+
+# Perplexity API (搜索功能，可选)
+PERPLEXITY_API_KEY=pplx-xxx
+```
+
+### GitHub OAuth 配置
+
+1. 前往 https://github.com/settings/developers
+2. 创建 OAuth App
+3. Authorization callback URL: `http://127.0.0.1:19642/api/auth/github/callback`
+4. 将 Client ID 和 Client Secret 写入 `.env`
+
+## API 文档
+
+HTTP API Bridge 运行在 `http://127.0.0.1:19642`
+
+### 服务状态
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| `GET` | `/api/ping` | 服务状态（代理到后端 Socket） |
+
+### 转写历史
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| `GET` | `/api/transcriptions` | 列表（支持 `q`, `from`, `to`, `limit` 参数） |
+| `POST` | `/api/transcriptions` | 新增记录 |
+| `GET` | `/api/transcriptions/:id` | 单条查看 |
+| `DELETE` | `/api/transcriptions/:id` | 删除 |
+| `PATCH` | `/api/transcriptions/:id/star` | 收藏/取消 |
+
+### 设置
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| `GET` | `/api/settings` | 读取所有设置 |
+| `PATCH` | `/api/settings` | 更新设置（JSON body） |
+
+### 模型 & 设备
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| `GET` | `/api/models` | 可用模型列表 + 当前标记 |
+| `GET` | `/api/devices` | 音频输入设备列表 |
+| `GET` | `/api/devices/test` | 录音 2 秒测试音量（支持 `?device=N`） |
+
+### 技术名词
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| `GET` | `/api/terms` | 读取纠错字典 |
+| `POST` | `/api/terms` | 添加词条 (`{wrong, correct}`) |
+| `DELETE` | `/api/terms/:id` | 删除词条 |
+
+### 服务管理
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| `POST` | `/api/service/start` | 启动转写服务 + 热键守护 |
+| `POST` | `/api/service/stop` | 停止所有服务 |
+
+### 认证
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| `GET` | `/api/auth/github/url` | 获取 OAuth 授权 URL |
+| `GET` | `/api/auth/github/callback` | OAuth 回调（自动交换 token） |
+| `GET` | `/api/auth/user` | 当前登录用户 |
+| `POST` | `/api/auth/logout` | 登出 |
+
+### 更新
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| `GET` | `/api/updates/check` | 检查 GitHub Releases 更新 |
+
+## SQLite Schema
+
+```sql
+-- 转写历史
+CREATE TABLE transcriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    text TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    duration_ms INTEGER,
+    word_count INTEGER,
+    model TEXT,
+    starred INTEGER DEFAULT 0
+);
+
+-- 设置（key-value）
+CREATE TABLE settings (
+    key TEXT PRIMARY KEY,
+    value TEXT
+);
+
+-- 用户（GitHub OAuth）
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    github_id INTEGER UNIQUE,
+    login TEXT,
+    name TEXT,
+    avatar_url TEXT,
+    access_token TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+```
+
+## 相关仓库
+
+| 仓库 | 说明 |
+|------|------|
+| [voicecoder](https://github.com/ClungTsang/voicecoder) | 本仓库：核心后端 |
+| [voicecoder-desktop](https://github.com/ClungTsang/voicecoder-desktop) | 桌面端 UI (Tauri v2 + Vue 3) |
+| [voicecoder-site](https://github.com/ClungTsang/voicecoder-site) | 官网 |
+
+## License
+
+[MIT](LICENSE)
+
+---
+
+<div align="center">
+Made with ♥ by <a href="https://github.com/ClungTsang">ClungTsang</a>
+</div>
