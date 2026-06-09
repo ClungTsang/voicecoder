@@ -2,77 +2,58 @@
   "_comment": "VoiceCoder v4 技术名词纠错字典 — SenseVoice 常见误识别 → 正确词",
   "_updated": "2026-06-09",
   "_usage": "两层匹配: 1) 精确短语替换 2) 模糊正则匹配",
-
   "exact": {
     "gt hu": "GitHub",
     "gt h u": "GitHub",
     "g thub": "GitHub",
     "github": "GitHub",
     "吉特哈勃": "GitHub",
-
     "rainway": "Railway",
     "railway": "Railway",
     "瑞尔威": "Railway",
-
     "s派 base": "Supabase",
     "s派base": "Supabase",
     "superbase": "Supabase",
     "superb base": "Supabase",
     "苏帕贝斯": "Supabase",
-
     "cloud code": "Claude Code",
     "cloudcode": "Claude Code",
     "克劳德 code": "Claude Code",
-
     "cloudfl": "Cloudflare",
     "cloudflare": "Cloudflare",
     "cloud flareare": "Cloudflare",
     "cloud flare": "Cloudflare",
-
     "verll": "Vercel",
     "vercel": "Vercel",
     "workout": "Vercel",
     "维尔塞尔": "Vercel",
-
     "deeps": "DeepSeek",
     "deep seek": "DeepSeek",
     "leept": "DeepSeek",
     "迪普西克": "DeepSeek",
-
     "hermesag": "Hermes Agent",
     "hermes agent": "Hermes Agent",
-
     "typepescript": "TypeScript",
     "typescript": "TypeScript",
     "type script": "TypeScript",
-
     "ns框架": "Nuxt框架",
     "nuxt": "Nuxt",
-
     "docker": "Docker",
     "道克": "Docker",
-
     "react": "React",
     "vue": "Vue",
     "angular": "Angular",
-
     "node js": "Node.js",
     "nodejs": "Node.js",
-
     "python": "Python",
     "java script": "JavaScript",
     "javascript": "JavaScript",
-    "typescript": "TypeScript",
-
     "open a i": "OpenAI",
     "openai": "OpenAI",
-
     "claude": "Claude",
     "克劳德": "Claude",
-
     "gemini": "Gemini",
     "双子座": "Gemini",
-
     "gpt": "GPT",
     "llm": "LLM",
     "api": "API",
@@ -82,7 +63,6 @@
     "http": "HTTP",
     "rest": "REST",
     "graphql": "GraphQL",
-
     "supabase": "Supabase",
     "firebase": "Firebase",
     "mongodb": "MongoDB",
@@ -91,25 +71,19 @@
     "postgres": "PostgreSQL",
     "mysql": "MySQL",
     "sqlite": "SQLite",
-
     "kubernetes": "Kubernetes",
-    "docker": "Docker",
     "nginx": "Nginx",
     "apache": "Apache",
-
     "git hub": "GitHub",
     "gitlab": "GitLab",
     "bitbucket": "Bitbucket",
-
     "tailwind": "Tailwind",
     "bootstrap": "Bootstrap",
     "element": "Element",
-
     "webpack": "Webpack",
     "vite": "Vite",
     "rollup": "Rollup",
     "esbuild": "esbuild",
-
     "claude code": "Claude Code",
     "copilot": "Copilot",
     "cursor": "Cursor",
@@ -117,18 +91,51 @@
     "vs code": "VS Code",
     "vscode": "VS Code"
   },
-
   "regex": [
-    ["\\bgt[- .]?h[uu]b\\b", "GitHub"],
-    ["\\b(deeps|deep[- ]?seek|leept)\\b", "DeepSeek"],
-    ["\\b(hermes[- ]?ag|hermesag)\\b", "Hermes Agent"],
-    ["\\b(type[- ]?pe?script)\\b", "TypeScript"],
-    ["\\b(cloud[- ]?code)\\b", "Claude Code"],
-    ["\\b(verll|verce[il])\\b", "Vercel"],
-    ["\\b(cloud[- ]?fl(?:are|a?re?))\\b", "Cloudflare"],
-    ["\\b(s[- ]?派[- ]?base|super[- ]?base)\\b", "Supabase"],
-    ["\\b(n[s]框架)\\b", "Nuxt框架"],
-    ["\\b(open[- ]?a[- ]?i)\\b", "OpenAI"],
-    ["\\b(java[- ]?script)\\b", "JavaScript"]
-  ]
+    [
+      "\\bgt[- .]?h[uu]b\\b",
+      "GitHub"
+    ],
+    [
+      "\\b(deeps|deep[- ]?seek|leept)\\b",
+      "DeepSeek"
+    ],
+    [
+      "\\b(hermes[- ]?ag|hermesag)\\b",
+      "Hermes Agent"
+    ],
+    [
+      "\\b(type[- ]?pe?script)\\b",
+      "TypeScript"
+    ],
+    [
+      "\\b(cloud[- ]?code)\\b",
+      "Claude Code"
+    ],
+    [
+      "\\b(verll|verce[il])\\b",
+      "Vercel"
+    ],
+    [
+      "\\b(cloud[- ]?fl(?:are|a?re?))\\b",
+      "Cloudflare"
+    ],
+    [
+      "\\b(s[- ]?派[- ]?base|super[- ]?base)\\b",
+      "Supabase"
+    ],
+    [
+      "\\b(n[s]框架)\\b",
+      "Nuxt框架"
+    ],
+    [
+      "\\b(open[- ]?a[- ]?i)\\b",
+      "OpenAI"
+    ],
+    [
+      "\\b(java[- ]?script)\\b",
+      "JavaScript"
+    ]
+  ],
+  "pyton": "Python"
 }
