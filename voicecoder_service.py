@@ -100,27 +100,55 @@ def load_model(model_size='sensevoice'):
     global _model
     import sherpa_onnx
 
-    model_path = os.path.join(SENSEVOICE_MODEL_DIR, 'model.int8.onnx')
-    tokens_path = os.path.join(SENSEVOICE_MODEL_DIR, 'tokens.txt')
+    if model_size == 'firered':
+        # FireRedASR-AED: SOTA Chinese ASR, 1.1B params, ~3% CER
+        model_dir = os.path.expanduser('~/.cache/voicecoder/firered-asr')
+        encoder_path = os.path.join(model_dir, 'encoder.int8.onnx')
+        decoder_path = os.path.join(model_dir, 'decoder.int8.onnx')
+        tokens_path = os.path.join(model_dir, 'tokens.txt')
 
-    if not os.path.exists(model_path):
-        print(f'[VoiceCoder] ERROR: SenseVoice model not found at {model_path}', file=sys.stderr)
-        sys.exit(1)
+        if not os.path.exists(encoder_path):
+            print(f'[VoiceCoder] ERROR: FireRedASR encoder not found at {encoder_path}', file=sys.stderr)
+            print(f'[VoiceCoder] Download from: https://huggingface.co/csukuangfj/sherpa-onnx-fire-red-asr-large-zh_en-2025-02-16', file=sys.stderr)
+            sys.exit(1)
 
-    print(f"[VoiceCoder] Loading SenseVoice Small model...", file=sys.stderr)
-    t0 = time.time()
+        print(f"[VoiceCoder] Loading FireRedASR-AED model (1.1B, Mandarin SOTA)...", file=sys.stderr)
+        t0 = time.time()
 
-    _model = sherpa_onnx.OfflineRecognizer.from_sense_voice(
-        model=model_path,
-        tokens=tokens_path,
-        num_threads=4,
-        provider='CoreML',
-        language='zh',
-        use_itn=True,
-    )
+        _model = sherpa_onnx.OfflineRecognizer.from_fire_red_asr(
+            encoder=encoder_path,
+            decoder=decoder_path,
+            tokens=tokens_path,
+            num_threads=4,
+            provider='coreml',
+        )
 
-    elapsed = time.time() - t0
-    print(f"[VoiceCoder] SenseVoice loaded in {elapsed:.1f}s (int8 ONNX + CoreML)", file=sys.stderr)
+        elapsed = time.time() - t0
+        print(f"[VoiceCoder] FireRedASR loaded in {elapsed:.1f}s (int8 ONNX + CoreML)", file=sys.stderr)
+
+    else:
+        # SenseVoice Small: default, very fast, multilingual
+        model_path = os.path.join(SENSEVOICE_MODEL_DIR, 'model.int8.onnx')
+        tokens_path = os.path.join(SENSEVOICE_MODEL_DIR, 'tokens.txt')
+
+        if not os.path.exists(model_path):
+            print(f'[VoiceCoder] ERROR: SenseVoice model not found at {model_path}', file=sys.stderr)
+            sys.exit(1)
+
+        print(f"[VoiceCoder] Loading SenseVoice Small model...", file=sys.stderr)
+        t0 = time.time()
+
+        _model = sherpa_onnx.OfflineRecognizer.from_sense_voice(
+            model=model_path,
+            tokens=tokens_path,
+            num_threads=4,
+            provider='CoreML',
+            language='zh',
+            use_itn=True,
+        )
+
+        elapsed = time.time() - t0
+        print(f"[VoiceCoder] SenseVoice loaded in {elapsed:.1f}s (int8 ONNX + CoreML)", file=sys.stderr)
 
 
 def correct_terms(text):
@@ -438,7 +466,7 @@ def handle_client(conn):
             conn.sendall(json.dumps({
                 'status': 'ok',
                 'recording': _recording,
-                'model': 'SenseVoice Small (ONNX/CoreML)',
+                'model': 'FireRedASR-AED (1.1B, Mandarin SOTA)',
                 'lang': 'zh (简体中文)'
             }).encode())
 
@@ -502,7 +530,7 @@ def run_server():
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='VoiceCoder v4 (SenseVoice)')
-    parser.add_argument('--model', default='sensevoice', choices=['sensevoice'])
+    parser.add_argument('--model', default='sensevoice', choices=['sensevoice', 'firered'])
     parser.add_argument('--lang', default='zh')
     parser.add_argument('--socket', default='/tmp/voicecoder.sock')
     parser.add_argument('--device', type=int, default=None,

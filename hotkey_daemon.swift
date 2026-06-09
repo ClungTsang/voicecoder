@@ -180,12 +180,11 @@ class MouseMonitor {
     }
 
     func showAccessibilityPrompt() {
+        // Only update status bar, don't open settings repeatedly
         DispatchQueue.main.async {
-            // Just update status bar, don't block or terminate
             if let item = self.statusItem?.menu?.item(withTag: 100) {
                 item.title = "VoiceCoder: ⚠️ 需要辅助功能权限"
             }
-            print("[MouseMonitor] Please grant Accessibility permission in System Settings → Privacy & Security → Accessibility")
         }
     }
 
@@ -334,6 +333,15 @@ class ServiceManager {
         proc.arguments = [script, "--model", "sensevoice", "--lang", "zh"]
         proc.environment = ProcessInfo.processInfo.environment
         proc.currentDirectoryURL = URL(fileURLWithPath: projectDir)
+
+        let logPath = "/tmp/voicecoder-service.log"
+        // Redirect stdout/stderr to log file
+        let logFile = FileHandle(forWritingAtPath: logPath) ?? {
+            FileManager.default.createFile(atPath: logPath, contents: nil)
+            return FileHandle(forWritingAtPath: logPath)!
+        }()
+        proc.standardOutput = logFile
+        proc.standardError = logFile
 
         do {
             try proc.run()
