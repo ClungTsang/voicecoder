@@ -25,6 +25,14 @@
 
 ### 安装
 
+**一行命令安装（推荐）：**
+
+```bash
+curl -fsSL https://voicecoder.org/install.sh | bash
+```
+
+**或者手动安装：**
+
 ```bash
 git clone https://github.com/ClungTsang/voicecoder.git ~/workspace/voicecoder
 cd ~/workspace/voicecoder
