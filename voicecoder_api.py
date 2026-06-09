@@ -32,8 +32,8 @@ elif platform.system() == 'Linux':
     DB_DIR = os.path.expanduser('~/.local/share/voicecoder')
 DB_PATH = os.path.join(DB_DIR, 'voicecoder.db')
 
-GITHUB_CLIENT_ID = ''
-GITHUB_CLIENT_SECRET = ''
+GITHUB_CLIENT_ID = 'Ov23ct8qzWOi7eQCDh36'
+GITHUB_CLIENT_SECRET = 'REDACTED_GITHUB_SECRET'
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 TERMS_PATH = os.path.join(SCRIPT_DIR, 'tech_terms.json')
