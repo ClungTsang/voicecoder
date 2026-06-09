@@ -314,10 +314,24 @@ class Handler(BaseHTTPRequestHandler):
             code = params.get('code')
             if code and GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET:
                 user = github_exchange_code(code)
+                self._cors()
                 self.send_response(200)
                 self.send_header('Content-Type', 'text/html; charset=utf-8')
                 self.end_headers()
-                self.wfile.write(b'<html><body><h2>Login successful!</h2><p>You can close this tab and return to VoiceCoder.</p><script>window.close()</script></body></html>')
+                # Auto-redirect back to Tauri app after 2 seconds
+                html = '''<html><body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#fafaf9">
+                <div style="text-align:center">
+                <h2 style="color:#0d9488">✓ 登录成功！</h2>
+                <p>欢迎，''' + (user.get('username', '') if user else '') + '''</p>
+                <p style="color:#78716e;font-size:14px">正在返回 VoiceCoder...</p>
+                <script>
+                setTimeout(function(){
+                  window.location.href = 'tauri://localhost';
+                  try { window.close(); } catch(e) {}
+                }, 1500);
+                </script>
+                </div></body></html>'''
+                self.wfile.write(html.encode('utf-8'))
             else:
                 self._json({'error': 'OAuth not configured'}, 400)
             return
@@ -368,13 +382,31 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == '/api/service/start':
             service_script = os.path.join(SCRIPT_DIR, 'voicecoder_service.py')
+            daemon_script = os.path.join(SCRIPT_DIR, 'voicecoder_daemon.py')
             python_bin = sys.executable
             try:
+                # Start the transcription service
                 subprocess.Popen(
                     [python_bin, service_script],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                     cwd=SCRIPT_DIR
                 )
+                # Start the hotkey daemon (mouse middle button listener)
+                if os.path.exists(daemon_script):
+                    subprocess.Popen(
+                        [python_bin, daemon_script],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        cwd=SCRIPT_DIR
+                    )
+                # On macOS also try the native Swift daemon
+                swift_daemon = os.path.join(SCRIPT_DIR, 'daemon.swift')
+                compiled_daemon = os.path.join(SCRIPT_DIR, 'VoiceCoderDaemon')
+                if platform.system() == 'Darwin' and os.path.exists(compiled_daemon):
+                    subprocess.Popen(
+                        [compiled_daemon],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        cwd=SCRIPT_DIR
+                    )
                 time.sleep(3)
                 self._json({'ok': is_backend_running()})
             except Exception as e:

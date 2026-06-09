@@ -19,6 +19,8 @@ import re
 import platform
 import numpy as np
 
+API_PORT = 19642  # HTTP API bridge port
+
 # --- State ---
 _recording = False
 _recording_lock = threading.Lock()
@@ -307,6 +309,27 @@ def stop_and_transcribe():
             text = correct_terms(text)
 
         _full_transcript = text
+
+        # Record transcription to SQLite via API bridge
+        try:
+            import urllib.request as _ur
+            data = json.dumps({
+                'text': text,
+                'duration_ms': int(duration_sec * 1000),
+                'model': 'SenseVoice Small',
+                'language': 'zh',
+                'char_count': len(text)
+            }).encode()
+            req = _ur.Request(
+                f'http://127.0.0.1:{API_PORT}/api/transcriptions',
+                data=data,
+                headers={'Content-Type': 'application/json'},
+                method='POST'
+            )
+            _ur.urlopen(req, timeout=2)
+        except Exception:
+            pass  # Don't block transcription if recording fails
+
         return {'result': text}
 
     except Exception as e:
