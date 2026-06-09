@@ -399,11 +399,22 @@ class Handler(BaseHTTPRequestHandler):
                 resp = json.loads(urllib.request.urlopen(req, timeout=5).read().decode())
                 latest = resp.get('tag_name', 'v0.0.0').lstrip('v')
                 current = '4.0.0'
+
+                # Find .dmg download URL
+                dmg_url = ''
+                for asset in resp.get('assets', []):
+                    if asset.get('name', '').endswith('.dmg') and 'aarch64' in asset.get('name', ''):
+                        dmg_url = asset.get('browser_download_url', '')
+                        break
+
                 self._json({
                     'has_update': latest != current and latest > current,
                     'version': resp.get('tag_name', ''),
                     'notes': resp.get('body', ''),
                     'url': resp.get('html_url', ''),
+                    'dmg_url': dmg_url,
+                    'current': current,
+                    'latest': latest,
                 })
             except Exception as e:
                 self._json({'has_update': False, 'error': str(e)})
