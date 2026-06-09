@@ -298,6 +298,50 @@ class Handler(BaseHTTPRequestHandler):
             self._json(models)
             return
 
+        if path == '/api/devices':
+            try:
+                import sounddevice as sd
+                devices = []
+                for i, d in enumerate(sd.query_devices()):
+                    if d['max_input_channels'] > 0:
+                        devices.append({
+                            'id': i,
+                            'name': d['name'],
+                            'channels': d['max_input_channels'],
+                            'sample_rate': int(d['default_samplerate']),
+                            'is_default': sd.default.device[0] == i,
+                        })
+                self._json(devices)
+            except Exception as e:
+                self._json({'error': str(e)}, 500)
+            return
+
+        if path == '/api/devices/test':
+            # Capture 2 seconds of audio and return volume stats
+            try:
+                import sounddevice as sd
+                import numpy as np
+                device_id = params.get('device', '')
+                dev = int(device_id) if device_id and device_id != 'null' else None
+                fs = 16000
+                duration = 2.0
+                audio = sd.rec(int(fs * duration), samplerate=fs, channels=1,
+                               dtype='int16', device=dev)
+                sd.wait()
+                arr = audio.flatten().astype(np.float32) / 32768.0
+                peak = float(np.max(np.abs(arr)))
+                rms = float(np.sqrt(np.mean(arr ** 2)))
+                self._json({
+                    'peak': round(peak, 4),
+                    'rms': round(rms, 4),
+                    'level': 'loud' if peak > 0.3 else ('normal' if peak > 0.05 else 'quiet'),
+                    'suggestion': '音量正常' if peak > 0.05 else '音量过低，请靠近麦克风或检查输入设备',
+                    'duration_ms': int(duration * 1000),
+                })
+            except Exception as e:
+                self._json({'error': str(e)}, 500)
+            return
+
         if path == '/api/terms':
             self._json(load_terms())
             return
